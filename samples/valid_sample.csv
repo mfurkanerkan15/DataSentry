@@ -1,0 +1,11 @@
+id,isim,email,yas,departman,maas
+1,Ahmet Yılmaz,ahmet@example.com,32,Mühendislik,15000
+2,Elif Kaya,elif@example.com,28,Pazarlama,12000
+3,Mehmet Demir,mehmet@example.com,45,Yönetim,25000
+4,Zeynep Çelik,zeynep@example.com,35,Mühendislik,17000
+5,Can Aksoy,can@example.com,29,Pazarlama,11500
+6,Ayşe Koç,ayse@example.com,41,İnsan Kaynakları,14000
+7,Burak Şahin,burak@example.com,26,Mühendislik,13000
+8,Derya Arslan,derya@example.com,38,Finans,16000
+9,Emre Yıldız,emre@example.com,33,Mühendislik,15500
+10,Fatma Öztürk,fatma@example.com,30,Pazarlama,12500
