@@ -2,22 +2,21 @@
 
 CSV Data Quality & Validation CLI
 
-Python tabanli, yerel calisan, yapilandirilabilir veri kalite araci.
+Python tabanlı, yerel çalışan, modüler ve yapılandırılabilir veri kalite doğrulama aracı.
 
 ---
 
-## Ozellikler
+## Özellikler
 
-| Ozellik | Aciklama |
+| Özellik | Açıklama |
 |---|---|
-| Dosya dogrulama | CSV okunabilir mi, gerekli sutunlar var mi? |
-| Eksik deger analizi | Sutun bazinda bos deger sayisi ve yuzdesi |
-| Tekrarlanan kayitlar | Yinelenen satirlarin sayisi ve orani |
-| Veri tipi kontrolu | Beklenen tiplerle uyusmayan degerleri bulma |
-| Sema dogrulama | Zorunlu sutunlar, tipler ve nullable kurallari |
-| Aykiri deger tespiti | Sayisal sutunlarda IQR yontemiyle suphe li degerleri isaretleme |
-| Raporlama | Terminal, JSON ve HTML ciktisi |
-| CI/CD modu | Belirlenen kurallar basarisizsa sifir olmayan cikis kodu |
+| Dosya Doğrulama | CSV okunabilirlik, encoding (BOM) ve boş dosya kontrolleri |
+| Eksik Değer Analisi | Sütun bazında boş/null değer sayısı, yüzdesi ve satır konumları |
+| Tekrarlanan Kayıtlar | Yinelenen satır tespiti ve ikiz satır eşleşme haritası `(Kopya -> Orijinal)` |
+| Veri Tipi Kontrolü | Sayısal sütunlardaki hatalı metin ve tip uyuşmazlıklarının tespiti |
+| Aykırı Değer Tespiti | Sayısal sütunlarda IQR (Interquartile Range) yöntemiyle şüpheli uç değerler |
+| Zengin Terminal Raporu | Rich kütüphanesi ile renkli, anlaşılır ve detaylı tablo çıktıları |
+| CI/CD Modu | Otomasyon hatasında 1 çıkış kodu (Exit Code 1) ile pipeline durdurma |
 
 ---
 
@@ -25,103 +24,99 @@ Python tabanli, yerel calisan, yapilandirilabilir veri kalite araci.
 
 ### Gereksinimler
 
-- Python 3.11 veya ustu
+- Python 3.11 veya üstü
 
-### Adimlar
+### Adımlar
 
 ```bash
 # 1. Repoyu klonla
 git clone https://github.com/mfurkanerkan15/DataSentry.git
 cd DataSentry
 
-# 2. Sanal ortam olustur
+# 2. Sanal ortam oluştur
 python -m venv .venv
 
-# 3. Sanal ortami aktif et
+# 3. Sanal ortamı aktif et
 # Windows:
 .venv\Scripts\activate
 # macOS/Linux:
 source .venv/bin/activate
 
-# 4. Projeyi kur
+# 4. Projeyi geliştirici modunda kur
 pip install -e ".[dev]"
 ```
 
 ---
 
-## Kullanim
-
-### Temel kontrol
+### Komut Seçenekleri
 
 ```bash
-datasentry check samples/valid_sample.csv
-```
-
-### Ornek cikti
-
-```
-+-------------- DataSentry Check ---------------+
-| Dosya: samples/valid_sample.csv                |
-+------------------------------------------------+
-
-         Dosya Ozeti
-+----------------+------------------+
-| Ozellik        | Deger            |
-+----------------+------------------+
-| Dosya Adi      | valid_sample.csv |
-| Boyut          | 0.55 KB          |
-| Satir Sayisi   | 10               |
-| Sutun Sayisi   | 6                |
-+----------------+------------------+
-```
-
-### Secenekler
-
-```bash
-# Farkli karakter kodlamasi
+# Farklı karakter kodlaması (Varsayılan: utf-8-sig)
 datasentry check dosya.csv --encoding latin-1
 
-# Farkli ayirici karakter (ornegin noktali virgul)
+# Farklı ayırıcı karakter (örneğin noktalı virgül)
 datasentry check dosya.csv --delimiter ";"
 
-# Versiyon bilgisi
+# Raporda listelenecek maksimum örnek satır sayısını belirleme (Varsayılan: 100)
+datasentry check dosya.csv --max-samples 50
+
+# Sürüm bilgisi
 datasentry --version
 ```
 
 ---
 
-## Proje Yapisi
+## Proje Yapısı
 
-```
+```text
 DataSentry/
-├── .gitignore              # Git tarafından takip edilmeyecek dosyalar
-├── pyproject.toml          # Proje paketleme, bağımlılıklar ve araç yapılandırmaları
-├── README.md               # Proje dökümantasyonu
-├── samples/                # Örnek CSV test verileri
-│   ├── valid_sample.csv    # Temiz, geçerli veri örneği
-│   └── invalid_sample.csv  # Hatalı/eksik veri örneği (testler için)
-└── src/
-    └── datasentry/         # Kaynak kod paketi
-        ├── __init__.py     # Paket tanımı ve sürüm bilgisi
-        ├── cli.py          # CLI komutları ve terminal arayüzü (Typer + Rich)
-        ├── loader.py       # CSV yükleme, okuma ve dosya boyutu/özet mantığı
-        └── exceptions.py   # Projeye özel hata sınıfları
+├── .gitignore                  # Git tarafından takip edilmeyecek dosyalar
+├── pyproject.toml              # Proje paketleme, bağımlılıklar ve araç yapılandırmaları
+├── README.md                   # Proje dökümantasyonu
+├── samples/                    # Örnek CSV test verileri
+│   ├── valid_sample.csv        # Temiz, geçerli veri örneği
+│   ├── invalid_sample.csv      # Hatalı/eksik veri örneği
+│   └── finans_ilk_deneme.csv   # Gerçek dünya finansal verisi örneği
+├── tests/                      # Birim testleri
+│   └── test_validators.py      # Kalite kontrol motoru Pytest birim testleri
+└── datasentry/                 # Kaynak kod paketi
+    ├── __init__.py             # Paket tanımı ve sürüm bilgisi
+    ├── cli.py                  # CLI komutları ve terminal arayüzü (Typer + Rich)
+    ├── engine.py               # Doğrulama motoru (orkestrasyon)
+    ├── loader.py               # CSV yükleme ve dosya özet mantığı
+    ├── models.py               # Pydantic veri modelleri ve rapor sınıfları
+    ├── exceptions.py           # Projeye özel hata sınıfları
+    └── validators/             # Kalite kontrol fonksiyonları
+        ├── __init__.py
+        ├── missing.py          # Eksik değer analizi
+        ├── duplicates.py       # Tekrarlanan kayıt tespiti ve eşleşme haritası
+        ├── types.py            # Veri tipi uyuşmazlığı tespiti
+        └── outliers.py         # IQR aykırı değer tespiti
 ```
 
 ---
 
-## Teknoloji
+## Testleri Çalıştırma
 
-| Teknoloji | Neden? |
+Projedeki birim testleri koşturmak için:
+
+```bash
+pytest -v
+```
+
+---
+
+## Teknoloji Stack
+
+| Teknoloji | Kullanım Amacı |
 |---|---|
-| Python 3.11+ | Genis ekosistem ve okunabilir kod |
-| Pandas | CSV okuma ve veri analizi |
-| Typer | Tip guvenli, anlasilir CLI komutlari |
-| Rich | Tablo ve terminal raporlari |
-| Pydantic | Sema ve yapilandirma dogrulama |
-| Jinja2 | HTML raporu olusturma |
-| Pytest | Birim ve entegrasyon testleri |
-| Ruff | Lint ve kod bicimlendirme |
+| Python 3.11+ | Geniş ekosistem ve tip güvenliği |
+| Pandas | Yüksek performanslı CSV ve veri analizi |
+| Typer | Modern ve tip güvenli CLI komut yapısı |
+| Rich | Gelişmiş terminal tabloları ve renkli raporlama |
+| Pydantic v2 | Veri modelleri, şema ve rapor doğrulama |
+| Pytest | Birim (Unit) test mimarisi |
+| Ruff | Linting ve kod biçimlendirme |
 
 ---
 

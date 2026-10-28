@@ -1,23 +1,22 @@
 """CSV dosya yükleme ve ön doğrulama modülü."""
 
 from pathlib import Path
-
 import pandas as pd
 
 from datasentry.exceptions import (
     EmptyFileError,
-    FileNotFoundError,
+    FileNotFoundError as DataSentryFileNotFoundError,
     FileReadError,
     InvalidCSVError,
 )
 
 
-def load_csv(path: str, encoding: str = "utf-8", delimiter: str = ",") -> pd.DataFrame:
+def load_csv(path: str, encoding: str = "utf-8-sig", delimiter: str = ",") -> pd.DataFrame:
     """CSV dosyasını yükler ve temel doğrulamalardan geçirir.
 
     Args:
         path: CSV dosyasının yolu.
-        encoding: Dosya karakter kodlaması (varsayılan: utf-8).
+        encoding: Dosya karakter kodlaması (varsayılan: utf-8-sig / Excel BOM uyumlu).
         delimiter: Sütun ayırıcı karakter (varsayılan: virgül).
 
     Returns:
@@ -33,9 +32,9 @@ def load_csv(path: str, encoding: str = "utf-8", delimiter: str = ",") -> pd.Dat
 
     # 1. Dosya var mı?
     if not file_path.exists():
-        raise FileNotFoundError(str(file_path))
+        raise DataSentryFileNotFoundError(str(file_path))
 
-    # 2. Dosya boş mu?
+    # 2. Dosya fiziksel olarak boş mu? (0 Byte)
     if file_path.stat().st_size == 0:
         raise EmptyFileError(str(file_path))
 
@@ -43,7 +42,7 @@ def load_csv(path: str, encoding: str = "utf-8", delimiter: str = ",") -> pd.Dat
     try:
         df = pd.read_csv(file_path, encoding=encoding, delimiter=delimiter)
     except UnicodeDecodeError as e:
-        raise FileReadError(str(file_path), f"Karakter kodlama hatası: {e}") from e
+        raise FileReadError(str(file_path), f"Karakter kodlama hatası: {e}. Farklı bir encoding (--encoding latin-1) deneyin.") from e
     except PermissionError as e:
         raise FileReadError(str(file_path), f"Erişim izni reddedildi: {e}") from e
     except pd.errors.ParserError as e:
@@ -51,7 +50,7 @@ def load_csv(path: str, encoding: str = "utf-8", delimiter: str = ",") -> pd.Dat
     except Exception as e:
         raise FileReadError(str(file_path), str(e)) from e
 
-    # 4. DataFrame boş mu? (başlık var ama veri yok)
+    # 4. DataFrame boş mu? (başlık var ama 0 satır veri var)
     if df.empty:
         raise EmptyFileError(str(file_path))
 
@@ -69,11 +68,13 @@ def get_file_summary(df: pd.DataFrame, path: str) -> dict:
         Dosya özet bilgilerini içeren sözlük.
     """
     file_path = Path(path)
+    size_bytes = file_path.stat().st_size
 
     return {
         "dosya_adi": file_path.name,
         "dosya_yolu": str(file_path.resolve()),
-        "dosya_boyutu_kb": round(file_path.stat().st_size / 1024, 2),
+        "dosya_boyutu_bytes": size_bytes,
+        "dosya_boyutu_kb": round(size_bytes / 1024, 2),
         "satir_sayisi": len(df),
         "sutun_sayisi": len(df.columns),
         "sutunlar": list(df.columns),
