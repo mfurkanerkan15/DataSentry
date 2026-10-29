@@ -1,22 +1,26 @@
 # DataSentry
 
-CSV Data Quality & Validation CLI
+**CSV Data Quality & Validation CLI**
 
-Python tabanlı, yerel çalışan, modüler ve yapılandırılabilir veri kalite doğrulama aracı.
+Python tabanlı, yerel çalışan ve modüler bir veri kalite doğrulama aracı.
+
+> **Durum:** `v0.1.0` (MVP). Çekirdek kontroller ve terminal raporu hazır. YAML yapılandırma, JSON/HTML raporlama ve CI/CD otomasyonu [yol haritasında](#yol-haritası).
 
 ---
 
-## Özellikler
+## Özellikler (v0.1.0)
 
 | Özellik | Açıklama |
 |---|---|
-| Dosya Doğrulama | CSV okunabilirlik, encoding (BOM) ve boş dosya kontrolleri |
-| Eksik Değer Analisi | Sütun bazında boş/null değer sayısı, yüzdesi ve satır konumları |
-| Tekrarlanan Kayıtlar | Yinelenen satır tespiti ve ikiz satır eşleşme haritası `(Kopya -> Orijinal)` |
-| Veri Tipi Kontrolü | Sayısal sütunlardaki hatalı metin ve tip uyuşmazlıklarının tespiti |
-| Aykırı Değer Tespiti | Sayısal sütunlarda IQR (Interquartile Range) yöntemiyle şüpheli uç değerler |
-| Zengin Terminal Raporu | Rich kütüphanesi ile renkli, anlaşılır ve detaylı tablo çıktıları |
-| CI/CD Modu | Otomasyon hatasında 1 çıkış kodu (Exit Code 1) ile pipeline durdurma |
+| Dosya doğrulama | CSV okunabilirlik, encoding (BOM) ve boş dosya kontrolleri |
+| Eksik değer analizi | Sütun bazında boş/null değer sayısı, yüzdesi ve satır konumları |
+| Tekrarlanan kayıtlar | Yinelenen satır tespiti ve eşleşme haritası `(Kopya -> Orijinal)` |
+| Veri tipi kontrolü | Sayısal sütunlardaki hatalı metin ve tip uyuşmazlıklarının tespiti |
+| Aykırı değer tespiti | Sayısal sütunlarda IQR (Interquartile Range) yöntemiyle şüpheli uç değerler |
+| Terminal raporu | Rich ile renkli ve okunabilir tablo çıktıları |
+| Çıkış kodu | Kalite sorunu bulunduğunda `1` çıkış kodu ile CI süreçlerinde kullanılabilir |
+
+> **Not:** Aykırı değer, otomatik olarak hatalı veri demek değildir. Bu kontrol şüpheli değerleri işaretler; nihai karar kullanıcıya aittir.
 
 ---
 
@@ -48,16 +52,19 @@ pip install -e ".[dev]"
 
 ---
 
-### Komut Seçenekleri
+## Kullanım
 
 ```bash
+# Temel analiz
+datasentry check samples/valid_sample.csv  #datasentry check <dosya yolu>
+
 # Farklı karakter kodlaması (Varsayılan: utf-8-sig)
 datasentry check dosya.csv --encoding latin-1
 
 # Farklı ayırıcı karakter (örneğin noktalı virgül)
 datasentry check dosya.csv --delimiter ";"
 
-# Raporda listelenecek maksimum örnek satır sayısını belirleme (Varsayılan: 100)
+# Raporda listelenecek maksimum örnek satır sayısı (Varsayılan: 100)
 datasentry check dosya.csv --max-samples 50
 
 # Sürüm bilgisi
@@ -68,37 +75,72 @@ datasentry --version
 
 ## Proje Yapısı
 
-```text
+```
 DataSentry/
-├── .gitignore                  # Git tarafından takip edilmeyecek dosyalar
-├── pyproject.toml              # Proje paketleme, bağımlılıklar ve araç yapılandırmaları
-├── README.md                   # Proje dökümantasyonu
-├── samples/                    # Örnek CSV test verileri
+├── .gitignore
+├── pyproject.toml              # Paketleme, bağımlılıklar ve araç yapılandırmaları
+├── README.md
+├── samples/                    # Örnek CSV verileri
 │   ├── valid_sample.csv        # Temiz, geçerli veri örneği
-│   ├── invalid_sample.csv      # Hatalı/eksik veri örneği
-│   └── finans_ilk_deneme.csv   # Gerçek dünya finansal verisi örneği
-├── tests/                      # Birim testleri
-│   └── test_validators.py      # Kalite kontrol motoru Pytest birim testleri
-└── datasentry/                 # Kaynak kod paketi
+│   └── invalid_sample.csv      # Hatalı/eksik veri örneği  
+├── tests/
+│   └── test_validators.py      # Kalite kontrol birim testleri
+└── datasentry/
     ├── __init__.py             # Paket tanımı ve sürüm bilgisi
     ├── cli.py                  # CLI komutları ve terminal arayüzü (Typer + Rich)
     ├── engine.py               # Doğrulama motoru (orkestrasyon)
     ├── loader.py               # CSV yükleme ve dosya özet mantığı
     ├── models.py               # Pydantic veri modelleri ve rapor sınıfları
     ├── exceptions.py           # Projeye özel hata sınıfları
-    └── validators/             # Kalite kontrol fonksiyonları
-        ├── __init__.py
+    └── validators/
         ├── missing.py          # Eksik değer analizi
-        ├── duplicates.py       # Tekrarlanan kayıt tespiti ve eşleşme haritası
+        ├── duplicates.py       # Tekrarlanan kayıt tespiti
         ├── types.py            # Veri tipi uyuşmazlığı tespiti
         └── outliers.py         # IQR aykırı değer tespiti
 ```
 
+Tasarım ilkesi: CLI yalnızca giriş ve sunum katmanıdır. Kalite kontrolleri CLI'dan bağımsız çalışır, böylece çekirdek motor başka arayüzlerde de yeniden kullanılabilir.
+
+---
+
+## Yol Haritası
+
+| Sürüm | Odak | Planlanan özellikler | Durum |
+|---|---|---|---|
+| **v0.1.0** | Temel altyapı ve kontrol motoru | CLI, CSV yükleme, eksik değer, tekrar, tip ve aykırı değer kontrolleri, birim testler | ✅ Tamamlandı |
+| **v0.2.0** | Dinamik kurallar | `--config kurallar.yaml` desteği, Pydantic ile kural doğrulama (ör. negatif eşik reddi), zorunlu sütun ve nullable kontrolü için şema doğrulama | 🔜 Planlandı |
+| **v0.3.0** | Raporlama ve entegrasyon | `--report json` ve `--report html` (Jinja2), kural bazlı çıkış kodları (`0` başarılı, `1` kalite hatası, `2` kullanım/dosya hatası) | 🔜 Planlandı |
+| **v0.4.0** | Otomasyon | GitHub Actions ile otomatik test (push/PR), pre-commit hook'ları (Ruff) | 🔜 Planlandı |
+
+Planlanan örnek yapılandırma (v0.2.0 hedefi, henüz çalışmaz):
+
+```yaml
+checks:
+  missing_values:
+    enabled: true
+    max_missing_percent: 5
+  duplicates:
+    enabled: true
+    max_duplicate_percent: 0
+  schema:
+    required_columns: [customer_id, age, monthly_charges]
+  outliers:
+    method: iqr
+    severity: warning
+```
+
+---
+
+## Bilinen Sınırlamalar
+
+- Yalnızca CSV desteklenir.
+- Kalite kuralları şu an kod içinde sabittir; yapılandırma v0.2.0 ile gelecek.
+- Rapor çıktısı şimdilik yalnızca terminaldir.
+- Veriyi otomatik düzeltme veya silme yapılmaz; araç yalnızca raporlar.
+
 ---
 
 ## Testleri Çalıştırma
-
-Projedeki birim testleri koşturmak için:
 
 ```bash
 pytest -v
@@ -108,18 +150,14 @@ pytest -v
 
 ## Teknoloji Stack
 
-| Teknoloji | Kullanım Amacı |
+| Teknoloji | Kullanım amacı |
 |---|---|
-| Python 3.11+ | Geniş ekosistem ve tip güvenliği |
-| Pandas | Yüksek performanslı CSV ve veri analizi |
-| Typer | Modern ve tip güvenli CLI komut yapısı |
-| Rich | Gelişmiş terminal tabloları ve renkli raporlama |
-| Pydantic v2 | Veri modelleri, şema ve rapor doğrulama |
-| Pytest | Birim (Unit) test mimarisi |
-| Ruff | Linting ve kod biçimlendirme |
+| Python 3.11+ | Geniş ekosistem ve okunabilir kod |
+| Pandas | CSV okuma ve veri analizi |
+| Typer | Tip güvenli CLI komutları |
+| Rich | Terminal tabloları ve renkli raporlama |
+| Pydantic v2 | Veri modelleri ve doğrulama |
+| Pytest | Birim testleri |
+| Ruff | Lint ve kod biçimlendirme |
 
 ---
-
-## Lisans
-
-MIT
