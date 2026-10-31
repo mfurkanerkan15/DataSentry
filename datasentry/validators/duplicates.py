@@ -6,8 +6,7 @@ from datasentry.models import CheckResult, CheckStatus, Severity, ValidationIssu
 
 
 def check_duplicate_rows(
-    df: pd.DataFrame, 
-    max_row_samples: int = 100
+    df: pd.DataFrame, max_row_samples: int = 100
 ) -> CheckResult:
     """CSV veri setindeki yinelenen satırları ve hangi satırla eşleştiklerini analiz eder."""
     total_rows = len(df)
@@ -23,13 +22,15 @@ def check_duplicate_rows(
 
     # Tüm tekrarların grubunu bulmak için keep=False kullanıyoruz
     duplicate_mask = df.duplicated(keep=False)
-    
+
     if duplicate_mask.any():
         duplicated_df = df[duplicate_mask]
-        
-        # Birebir aynı olan satırları grupluyoruz
-        grouped = duplicated_df.groupby(list(df.columns), observed=True, sort=False)
-        
+
+        # Birebir aynı olan satırları grupluyoruz (NaN'lerin elenmemesi için dropna=False)
+        grouped = duplicated_df.groupby(
+            list(df.columns), observed=True, sort=False, dropna=False
+        )
+
         matches_dict: dict[int, int] = {}  # {Kopya Satır: Orijinal Satır}
         dup_sample: list[str] = []
 
@@ -38,7 +39,7 @@ def check_duplicate_rows(
             positions = (group.index + 2).tolist()
             original_row = positions[0]      # İlk görülen orijinal satır
             duplicate_rows = positions[1:]   # Kopya satırlar
-            
+
             for dup in duplicate_rows:
                 matches_dict[dup] = original_row
 

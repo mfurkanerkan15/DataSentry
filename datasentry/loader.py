@@ -1,13 +1,16 @@
 """CSV dosya yükleme ve ön doğrulama modülü."""
 
 from pathlib import Path
+
 import pandas as pd
 
 from datasentry.exceptions import (
     EmptyFileError,
-    FileNotFoundError as DataSentryFileNotFoundError,
     FileReadError,
     InvalidCSVError,
+)
+from datasentry.exceptions import (
+    FileNotFoundError as DataSentryFileNotFoundError,
 )
 
 
@@ -42,7 +45,11 @@ def load_csv(path: str, encoding: str = "utf-8-sig", delimiter: str = ",") -> pd
     try:
         df = pd.read_csv(file_path, encoding=encoding, delimiter=delimiter)
     except UnicodeDecodeError as e:
-        raise FileReadError(str(file_path), f"Karakter kodlama hatası: {e}. Farklı bir encoding (--encoding latin-1) deneyin.") from e
+        msg = (
+            f"Karakter kodlama hatası: {e}. "
+            "Farklı bir encoding (--encoding latin-1) deneyin."
+        )
+        raise FileReadError(str(file_path), msg) from e
     except PermissionError as e:
         raise FileReadError(str(file_path), f"Erişim izni reddedildi: {e}") from e
     except pd.errors.ParserError as e:

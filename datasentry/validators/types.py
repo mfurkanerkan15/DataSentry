@@ -1,17 +1,20 @@
 """Veri tipi uyuşmazlığı kontrol modülü."""
 
 from typing import Any
+
 import pandas as pd
 
 from datasentry.models import CheckResult, CheckStatus, Severity, ValidationIssue
 
 
 def check_type_mismatches(
-    df: pd.DataFrame, 
-    threshold: float = 0.5, 
-    max_row_samples: int = 100
+    df: pd.DataFrame,
+    threshold: float = 0.5,
+    max_row_samples: int = 100,
 ) -> CheckResult:
-    """String olarak yüklenmiş ancak çoğunluğu sayısal olan sütunlardaki bozuk değerleri tespit eder."""
+    """String olarak yüklenmiş ancak çoğunluğu sayısal olan sütunlardaki
+    bozuk değerleri tespit eder.
+    """
     total_rows = len(df)
     issues: list[ValidationIssue] = []
 
@@ -33,17 +36,17 @@ def check_type_mismatches(
 
         converted = pd.to_numeric(series, errors="coerce")
         numeric_count = int(converted.notna().sum())
-        
+
         # Orijinal df üzerinden maske oluşturarak indeks eşleşmesini garantiye alıyoruz
         invalid_mask = pd.to_numeric(df[col], errors="coerce").isna() & df[col].notna()
         invalid_count = int(invalid_mask.sum())
 
         if len(series) > 0 and (numeric_count / len(series)) >= threshold and invalid_count > 0:
             pct = round((invalid_count / total_rows) * 100, 2)
-            
+
             # Örnek geçersiz değerler (ilk 5 değer)
             invalid_samples: list[Any] = df.loc[invalid_mask, col].head(5).tolist()
-            
+
             # Pozisyonel indeks sırasıyla CSV satır numaraları hesabı
             invalid_positions = invalid_mask.to_numpy().nonzero()[0]
             all_invalid_rows = (invalid_positions + 2).tolist()

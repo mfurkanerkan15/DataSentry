@@ -8,6 +8,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from datasentry import __version__
+from datasentry.config import ConfigError, load_config
 from datasentry.engine import run_validations
 from datasentry.exceptions import DataSentryError
 from datasentry.loader import get_file_summary, load_csv
@@ -140,21 +141,24 @@ def render_report(report: ValidationReport, summary: dict) -> None:
         if report.total_warnings > 0:
             console.print(
                 Panel(
-                    f"[bold yellow]DOGRULAMA TAMAMLANDI (UYARILARLA):[/bold yellow] 0 Kritik Hata, {report.total_warnings} Uyari.",
+                    f"[bold yellow]DOGRULAMA TAMAMLANDI (UYARILARLA):[/bold yellow] "
+                    f"0 Kritik Hata, {report.total_warnings} Uyari.",
                     border_style="yellow",
                 )
             )
         else:
             console.print(
                 Panel(
-                    "[bold green]TUM KONTROLLER BASARILI:[/bold green] Veri setinde kalite sorunu bulunamadi.",
+                    "[bold green]TUM KONTROLLER BASARILI:[/bold green] "
+                    "Veri setinde kalite sorunu bulunamadi.",
                     border_style="green",
                 )
             )
     else:
         console.print(
             Panel(
-                f"[bold red]DOGRULAMA BASARISIZ:[/bold red] {report.total_errors} Kritik Hata, {report.total_warnings} Uyari tespit edildi.",
+                f"[bold red]DOGRULAMA BASARISIZ:[/bold red] "
+                f"{report.total_errors} Kritik Hata, {report.total_warnings} Uyari tespit edildi.",
                 border_style="red",
             )
         )
@@ -167,6 +171,13 @@ def check(
         ...,
         help="Kontrol edilecek CSV dosyasının yolu.",
         exists=False,
+    ),
+    config: Path | None = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="YAML yapılandırma dosyasının yolu.",
+        exists=True,
     ),
     encoding: str = typer.Option(
         "utf-8-sig",
@@ -201,10 +212,21 @@ def check(
         df = load_csv(str(file), encoding=encoding, delimiter=delimiter)
     except DataSentryError as e:
         console.print(f"\n[bold red]HATA:[/bold red] {e}\n")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=2)
+
+    ds_config = None
+    if config:
+        try:
+            ds_config = load_config(config)
+            console.print(f"[bold cyan]INFO:[/bold cyan] Yapılandırma yüklendi: {config}")
+        except ConfigError as e:
+            console.print(f"\n[bold red]YAPILANDIRMA HATASI:[/bold red]\n{e}\n")
+            raise typer.Exit(code=2)
 
     summary = get_file_summary(df, str(file))
-    report = run_validations(df, str(file), max_row_samples=max_samples)
+    report = run_validations(
+        df, str(file), max_row_samples=max_samples, config=ds_config
+    )
     render_report(report, summary)
 
     if not report.is_valid:
