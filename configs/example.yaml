@@ -1,0 +1,21 @@
+checks:
+  missing_values:
+    enabled: true
+    max_missing_percent: 5.0
+
+  duplicates:
+    enabled: true
+    max_duplicate_percent: 0.0
+
+  schema:
+    enabled: true
+    required_columns:
+      - id
+      - yas
+    columns:
+      id:
+        type: int
+        nullable: false
+      yas:
+        type: int
+        nullable: false

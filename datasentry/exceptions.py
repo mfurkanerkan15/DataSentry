@@ -37,3 +37,9 @@ class InvalidCSVError(DataSentryError):
         self.path = path
         self.reason = reason
         super().__init__(f"Geçersiz CSV: {path} — {reason}")
+
+
+class ConfigError(DataSentryError):
+    """Yapılandırma dosyası (YAML) okunamadığında veya geçersiz olduğunda fırlatılır."""
+
+    pass

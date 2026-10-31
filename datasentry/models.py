@@ -1,21 +1,20 @@
 """DataSentry ortak sonuç ve veri modelleri."""
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class Severity(str, Enum):
+class Severity(StrEnum):
     """Bulgunun önem derecesi."""
 
     INFO = "INFO"
     WARNING = "WARNING"
-
     ERROR = "ERROR"
 
 
-class CheckStatus(str, Enum):
+class CheckStatus(StrEnum):
     """Tek bir kontrolün tamamlanma durumu."""
 
     PASSED = "PASSED"

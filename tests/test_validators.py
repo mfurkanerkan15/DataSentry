@@ -1,7 +1,6 @@
 """DataSentry kalite kontrol motoru birim testleri."""
 
 import pandas as pd
-import pytest
 
 from datasentry.models import CheckStatus, Severity
 from datasentry.validators import (
@@ -56,6 +55,23 @@ def test_duplicate_rows_detection():
     assert "(4 -> 3)" in result.issues[0].message
 
 
+def test_duplicate_rows_with_nan():
+    """NaN içeren tekrarlanan kayıtların dropna=False ile doğru tespit edildiğini doğrular."""
+    df = pd.DataFrame(
+        {
+            "id": [1, 2, 2],
+            "aciklama": ["ilk", None, None],
+        }
+    )
+    result = check_duplicate_rows(df)
+
+    assert result.status == CheckStatus.FAILED
+    assert len(result.issues) == 1
+    assert result.issues[0].count == 1
+    # Satır 4 kopya, satır 3 orijinal -> (4 -> 3)
+    assert "(4 -> 3)" in result.issues[0].message
+
+
 def test_duplicate_rows_clean_data():
     """Tekil satırlardan oluşan veride PASSED döndüğünü doğrular."""
     df = pd.DataFrame({"id": [1, 2, 3], "deger": ["a", "b", "c"]})
@@ -104,6 +120,17 @@ def test_outliers_iqr_detection():
     assert result.issues[0].severity == Severity.WARNING
     assert result.issues[0].count == 1
     assert 1000000 in result.issues[0].sample_values
+
+
+def test_outliers_low_cardinality_ignored():
+    """İkili flag veya 5'ten az tekil değere sahip sütunların IQR'da
+    aykırı sayılmadığını doğrular.
+    """
+    df = pd.DataFrame({"is_active": [1, 1, 1, 1, 1, 1, 1, 0]})
+    result = check_outliers_iqr(df)
+
+    assert result.status == CheckStatus.PASSED
+    assert len(result.issues) == 0
 
 
 def test_outliers_clean_data():
