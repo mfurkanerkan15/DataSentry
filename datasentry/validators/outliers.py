@@ -11,8 +11,9 @@ def check_outliers_iqr(
     df: pd.DataFrame,
     multiplier: float = 1.5,
     max_row_samples: int = 100,
+    numeric_ratio_threshold: float = 0.8,
 ) -> CheckResult:
-    """Sayısal sütunlarda IQR yöntemiyle aykırı değerleri tespit eder."""
+    """Sayısal ve sayısal ağırlıklı sütunlarda IQR yöntemiyle aykırı değerleri tespit eder."""
     total_rows = len(df)
     issues: list[ValidationIssue] = []
 
@@ -24,23 +25,35 @@ def check_outliers_iqr(
             issues=[],
         )
 
-    numeric_cols = df.select_dtypes(include=["number"]).columns
+    for col in df.columns:
+        # Sayısal dtype kontrolü veya sayısal aday analizi
+        if pd.api.types.is_numeric_dtype(df[col]):
+            numeric_series = pd.to_numeric(df[col], errors="coerce")
+        else:
+            series_non_null = df[col].dropna()
+            if series_non_null.empty:
+                continue
+            converted = pd.to_numeric(series_non_null, errors="coerce")
+            valid_count = int(converted.notna().sum())
+            # Sayısal aday sayılma kriteri (örn. >= %80)
+            if (valid_count / len(series_non_null)) < numeric_ratio_threshold:
+                continue
+            numeric_series = pd.to_numeric(df[col], errors="coerce")
 
-    for col in numeric_cols:
-        series = df[col].dropna()
-        # Veri sayısı yetersizse veya sütun ikili/düşük kardinaliteli (flag vb.) ise atla
-        if len(series) < 4 or series.nunique() <= 5:
+        # Geçerli sayısal değerler üzerinden IQR sınırlarını hesapla
+        valid_numbers = numeric_series.dropna()
+        if len(valid_numbers) < 4 or valid_numbers.nunique() <= 5:
             continue
 
-        q1 = series.quantile(0.25)
-        q3 = series.quantile(0.75)
+        q1 = valid_numbers.quantile(0.25)
+        q3 = valid_numbers.quantile(0.75)
         iqr = q3 - q1
 
         lower_bound = q1 - (multiplier * iqr)
         upper_bound = q3 + (multiplier * iqr)
 
-        # Standart sınır kontrolü
-        outlier_mask = (df[col] < lower_bound) | (df[col] > upper_bound)
+        # Bozuk metinler ve NaN hesaplamaya girmesin; yalnızca geçerli sayılar
+        outlier_mask = (numeric_series < lower_bound) | (numeric_series > upper_bound)
         outlier_count = int(outlier_mask.sum())
 
         if outlier_count > 0:
@@ -50,7 +63,7 @@ def check_outliers_iqr(
             # Örnek aykırı değerler (ilk 5 değer)
             sample_outliers: list[Any] = df.loc[outlier_mask, col].head(5).tolist()
 
-            # Pozisyonel indeks sırasıyla CSV satır numaraları hesabı
+            # Pozisyonel indeks sırasıyla CSV satır numaraları hesabı (Excel indeksli)
             outlier_positions = outlier_mask.to_numpy().nonzero()[0]
             all_outlier_rows = (outlier_positions + 2).tolist()
 

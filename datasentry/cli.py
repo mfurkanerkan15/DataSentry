@@ -1,18 +1,21 @@
 """DataSentry CLI — giriş ve sunum katmanı."""
 
+import sys
 from pathlib import Path
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
-from rich.table import Table
 
 from datasentry import __version__
 from datasentry.config import ConfigError, load_config
 from datasentry.engine import run_validations
-from datasentry.exceptions import DataSentryError
+from datasentry.exceptions import DataSentryError, ReportError
 from datasentry.loader import get_file_summary, load_csv
-from datasentry.models import CheckStatus, Severity, ValidationReport
+from datasentry.models import ValidationReport
+from datasentry.reporters import ConsoleReporter, format_rows, get_reporter
+
+__all__ = ["app", "check", "format_rows", "main", "render_report"]
 
 app = typer.Typer(
     name="datasentry",
@@ -21,6 +24,7 @@ app = typer.Typer(
     rich_markup_mode="rich",
 )
 console = Console()
+err_console = Console(stderr=True)
 
 
 def version_callback(value: bool) -> None:
@@ -44,125 +48,51 @@ def main(
     """[bold green]DataSentry[/bold green] — CSV Data Quality & Validation CLI."""
 
 
-def format_rows(row_numbers: list[int], max_display: int = 5) -> str:
-    """Satır numaralarını okunabilir formatta biçimlendirir."""
-    if not row_numbers:
-        return "-"
-    if len(row_numbers) <= max_display:
-        return ", ".join(str(r) for r in row_numbers)
-    displayed = ", ".join(str(r) for r in row_numbers[:max_display])
-    remaining = len(row_numbers) - max_display
-    return f"{displayed} ... (+{remaining} satir)"
-
-
 def render_report(report: ValidationReport, summary: dict) -> None:
-    """Doğrulama sonuçlarını Rich ile terminale basar."""
-    # 1. Dosya Özeti Tablosu
-    info_table = Table(
-        title="Dosya Ozeti",
-        show_header=True,
-        header_style="bold cyan",
-        border_style="dim",
-    )
-    info_table.add_column("Ozellik", style="bold")
-    info_table.add_column("Deger", style="white")
+    """Doğrulama sonuçlarını Rich ile terminale basar (Geriye dönük uyumluluk)."""
+    ConsoleReporter(console=console).print_report(report, summary)
 
-    info_table.add_row("Dosya Adi", summary["dosya_adi"])
-    info_table.add_row("Boyut", report.file_size_human)
-    info_table.add_row("Satir Sayisi", str(summary["satir_sayisi"]))
-    info_table.add_row("Sutun Sayisi", str(summary["sutun_sayisi"]))
-    console.print()
-    console.print(info_table)
 
-    # 2. Kalite Kontrol Özeti Tablosu
-    check_table = Table(
-        title="Kalite Kontrolleri",
-        show_header=True,
-        header_style="bold cyan",
-        border_style="dim",
-    )
-    check_table.add_column("Kontrol", style="bold")
-    check_table.add_column("Durum", justify="center")
-    check_table.add_column("Etkilenen Kayit", justify="right")
+def _resolve_format_and_output(
+    format_opt: str | None,
+    output_opt: Path | None,
+) -> tuple[str, Path | None]:
+    """Çıktı formatını ve hedef dosya yolunu belirler."""
+    valid_formats = {"terminal", "console", "json", "html"}
 
-    for result in report.results:
-        if result.status == CheckStatus.PASSED:
-            status_text = "[bold green]PASSED[/bold green]"
-            count_text = "[green]0 kayit[/green]"
-        elif result.status == CheckStatus.WARNING:
-            status_text = "[bold yellow]WARNING[/bold yellow]"
-            count_text = f"[yellow]{result.total_affected_rows} kayit[/yellow]"
-        else:
-            status_text = "[bold red]FAILED[/bold red]"
-            count_text = f"[red]{result.total_affected_rows} kayit[/red]"
-
-        check_table.add_row(
-            result.name,
-            status_text,
-            count_text,
-        )
-
-    console.print()
-    console.print(check_table)
-
-    # 3. Bulunan Sorunların Detay Tablosu (varsa)
-    all_issues = [issue for r in report.results for issue in r.issues]
-    if all_issues:
-        issues_table = Table(
-            title="Tespit Edilen Bulgular, Uyarilar ve Satir Konumlari",
-            show_header=True,
-            header_style="bold magenta",
-            border_style="dim",
-        )
-        issues_table.add_column("Onem", justify="center", width=8)
-        issues_table.add_column("Sutun", style="bold", width=12)
-        issues_table.add_column("Mesaj", min_width=30)
-        issues_table.add_column("Satirlar (Excel/CSV)", style="cyan", width=24)
-
-        for issue in all_issues:
-            if issue.severity == Severity.ERROR:
-                sev_text = "[bold red]ERROR[/bold red]"
-            elif issue.severity == Severity.WARNING:
-                sev_text = "[bold yellow]WARN[/bold yellow]"
-            else:
-                sev_text = "[bold cyan]INFO[/bold cyan]"
-
-            col_name = issue.column if issue.column else "-"
-            rows_text = format_rows(issue.row_numbers)
-
-            issues_table.add_row(sev_text, col_name, issue.message, rows_text)
-
-        console.print()
-        console.print(issues_table)
-
-    # 4. Genel Sonuç Paneli
-    console.print()
-    if report.is_valid:
-        if report.total_warnings > 0:
-            console.print(
-                Panel(
-                    f"[bold yellow]DOGRULAMA TAMAMLANDI (UYARILARLA):[/bold yellow] "
-                    f"0 Kritik Hata, {report.total_warnings} Uyari.",
-                    border_style="yellow",
-                )
+    if format_opt is not None:
+        fmt = format_opt.strip().lower()
+        if fmt not in valid_formats:
+            err_console.print(
+                f"[bold red]HATA:[/bold red] Geçersiz format '{format_opt}'. "
+                f"Desteklenen formatlar: terminal, json, html"
             )
-        else:
-            console.print(
-                Panel(
-                    "[bold green]TUM KONTROLLER BASARILI:[/bold green] "
-                    "Veri setinde kalite sorunu bulunamadi.",
-                    border_style="green",
-                )
-            )
+            raise typer.Exit(code=2)
     else:
-        console.print(
-            Panel(
-                f"[bold red]DOGRULAMA BASARISIZ:[/bold red] "
-                f"{report.total_errors} Kritik Hata, {report.total_warnings} Uyari tespit edildi.",
-                border_style="red",
-            )
-        )
-    console.print()
+        fmt = None
+
+    target_output = output_opt
+    if output_opt is not None:
+        suffix = output_opt.suffix.lower()
+        if fmt is None:
+            if suffix == ".json":
+                fmt = "json"
+            elif suffix in {".html", ".htm"}:
+                fmt = "html"
+            else:
+                err_console.print(
+                    f"[bold red]HATA:[/bold red] Tanınmayan dosya uzantısı '{suffix}'. "
+                    f"Desteklenen uzantılar: .html, .json veya --format belirtin."
+                )
+                raise typer.Exit(code=2)
+    else:
+        if fmt is None:
+            fmt = "terminal"
+        elif fmt == "html":
+            # -f html verilmiş ama -o verilmemişse mantıklı varsayılan dosya
+            target_output = Path("datasentry_report.html")
+
+    return fmt, target_output
 
 
 @app.command()
@@ -197,37 +127,96 @@ def check(
         "-m",
         help="Raporda gösterilecek maksimum örnek/satır sayısı.",
     ),
+    output: Path | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Raporun kaydedileceği dosya yolu (.json veya .html).",
+    ),
+    format: str | None = typer.Option(
+        None,
+        "--format",
+        "-f",
+        help=(
+            "Çıktı formatı: terminal, json, html (varsayılan: terminal veya -o uzantısına göre). "
+            "'-f html' verilip -o belirtilmezse varsayılan 'datasentry_report.html' üretilir."
+        ),
+    ),
+    quiet: bool = typer.Option(
+        False,
+        "--quiet",
+        "-q",
+        help=(
+            "Terminal tablosunu gizler. '-f json' ile -o olmadan kullanılırsa "
+            "JSON'u doğrudan stdout'a basar."
+        ),
+    ),
+    show_path: bool = typer.Option(
+        False,
+        "--show-path",
+        help=(
+            "Rapor başlığında ve JSON çıktısında tam dosya yolunu gösterir. "
+            "Varsayılan olarak yalnızca dosya adı görüntülenir."
+        ),
+    ),
 ) -> None:
     """CSV dosyasını yükler, kalite kontrollerinden geçirir ve raporlar."""
-    console.print()
-    console.print(
-        Panel(
-            f"[bold]Dosya:[/bold] {file}",
-            title="[bold green]DataSentry Check[/bold green]",
-            border_style="green",
+    fmt, target_output = _resolve_format_and_output(format, output)
+    is_json_stdout = fmt == "json" and target_output is None
+
+    # Terminal başlığını sadece görsel modda bas
+    if not quiet and not is_json_stdout:
+        console.print()
+        console.print(
+            Panel(
+                f"[bold]Dosya:[/bold] {file}",
+                title="[bold green]DataSentry Check[/bold green]",
+                border_style="green",
+            )
         )
-    )
 
     try:
         df = load_csv(str(file), encoding=encoding, delimiter=delimiter)
     except DataSentryError as e:
-        console.print(f"\n[bold red]HATA:[/bold red] {e}\n")
+        err_console.print(f"\n[bold red]HATA:[/bold red] {e}\n")
         raise typer.Exit(code=2)
 
     ds_config = None
     if config:
         try:
             ds_config = load_config(config)
-            console.print(f"[bold cyan]INFO:[/bold cyan] Yapılandırma yüklendi: {config}")
+            if not quiet and not is_json_stdout:
+                console.print(f"[bold cyan]INFO:[/bold cyan] Yapılandırma yüklendi: {config}")
         except ConfigError as e:
-            console.print(f"\n[bold red]YAPILANDIRMA HATASI:[/bold red]\n{e}\n")
+            err_console.print(f"\n[bold red]YAPILANDIRMA HATASI:[/bold red]\n{e}\n")
             raise typer.Exit(code=2)
 
     summary = get_file_summary(df, str(file))
     report = run_validations(
         df, str(file), max_row_samples=max_samples, config=ds_config
     )
-    render_report(report, summary)
+
+    # 1. Dosyaya rapor kaydetme (varsa)
+    if target_output is not None:
+        try:
+            reporter = get_reporter(fmt, show_path=show_path)
+            saved_path = reporter.write(report, target_output)
+            if not quiet:
+                console.print(f"[bold green]Rapor kaydedildi:[/bold green] {saved_path}")
+        except (ReportError, Exception) as e:
+            err_console.print(f"\n[bold red]RAPOR YAZMA HATASI:[/bold red]\n{e}\n")
+            raise typer.Exit(code=2)
+
+    # 2. JSON stdout basımı (eğer -f json ve -o yoksa)
+    if is_json_stdout:
+        json_reporter = get_reporter("json", show_path=show_path)
+        sys.stdout.write(json_reporter.render(report) + "\n")
+        sys.stdout.flush()
+    elif not quiet and target_output is None and fmt in {"terminal", "console"}:
+        # Terminal çıktısı
+        ConsoleReporter(console=console, show_path=show_path).print_report(report, summary)
+    elif not quiet and target_output is not None and fmt in {"terminal", "console"}:
+        ConsoleReporter(console=console, show_path=show_path).print_report(report, summary)
 
     if not report.is_valid:
         raise typer.Exit(code=1)

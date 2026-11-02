@@ -43,3 +43,9 @@ class ConfigError(DataSentryError):
     """Yapılandırma dosyası (YAML) okunamadığında veya geçersiz olduğunda fırlatılır."""
 
     pass
+
+
+class ReportError(DataSentryError):
+    """Rapor oluşturulurken veya yazılırken oluşan hatalar."""
+
+    pass

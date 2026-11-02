@@ -1,5 +1,6 @@
 """DataSentry doğrulama motoru — tüm kontrolleri çalıştırıp rapor üretir."""
 
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -11,6 +12,7 @@ from datasentry.models import (
     Severity,
     ValidationIssue,
     ValidationReport,
+    calculate_quality_score,
 )
 from datasentry.validators import (
     check_duplicate_rows,
@@ -104,6 +106,8 @@ def run_validations(
     Returns:
         ValidationReport nesnesi.
     """
+    start_time = time.perf_counter()
+
     if config is None:
         config = DataSentryConfig()
         config.checks.outliers.multiplier = outlier_multiplier
@@ -176,6 +180,9 @@ def run_validations(
             )
         )
 
+    execution_time_ms = round((time.perf_counter() - start_time) * 1000, 2)
+    quality_score = calculate_quality_score(total_rows, results)
+
     return ValidationReport(
         file_name=path.name,
         file_path=str(path.resolve()),
@@ -183,4 +190,6 @@ def run_validations(
         total_rows=total_rows,
         total_columns=len(df.columns),
         results=results,
+        execution_time_ms=execution_time_ms,
+        quality_score=quality_score,
     )

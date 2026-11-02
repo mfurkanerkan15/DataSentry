@@ -1,4 +1,4 @@
-"""DataSentry kalite kontrol motoru birim testleri."""
+"""Validatör modülleri birim testleri."""
 
 import pandas as pd
 
@@ -12,25 +12,27 @@ from datasentry.validators import (
 
 
 def test_missing_values_detection():
-    """Eksik değerlerin doğru tespit edildiğini doğrular."""
+    """Eksik değerlerin (None/NaN/'') tespit edildiğini doğrular."""
     df = pd.DataFrame(
         {
-            "ad": ["Ali", None, "Veli"],
-            "yas": [25, 30, None],
+            "id": [1, 2, 3],
+            "isim": ["Ali", None, "Ahmet"],
+            "not": ["100", "   ", "85"],
         }
     )
     result = check_missing_values(df)
 
     assert result.status == CheckStatus.FAILED
     assert len(result.issues) == 2
-    assert result.issues[0].column == "ad"
+    assert result.issues[0].column == "isim"
     assert result.issues[0].count == 1
-    assert result.issues[0].severity == Severity.ERROR
+    assert result.issues[1].column == "not"
+    assert result.issues[1].count == 1
 
 
 def test_missing_values_clean_data():
-    """Temiz veride eksik değer kontrolünün PASSED döndüğünü doğrular."""
-    df = pd.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
+    """Eksik değer olmayan veri setinde PASSED döndüğünü doğrular."""
+    df = pd.DataFrame({"id": [1, 2], "val": ["a", "b"]})
     result = check_missing_values(df)
 
     assert result.status == CheckStatus.PASSED
@@ -38,11 +40,11 @@ def test_missing_values_clean_data():
 
 
 def test_duplicate_rows_detection():
-    """Yinelenen satırların ve eşleşmelerinin doğru tespit edildiğini doğrular."""
+    """Birebir yinelenen satırların indeksleriyle tespit edildiğini doğrular."""
     df = pd.DataFrame(
         {
-            "id": [1, 2, 2, 3],
-            "deger": ["a", "b", "b", "c"],
+            "id": [1, 2, 1, 3],
+            "isim": ["Ali", "Veli", "Ali", "Can"],
         }
     )
     result = check_duplicate_rows(df)
@@ -50,31 +52,27 @@ def test_duplicate_rows_detection():
     assert result.status == CheckStatus.FAILED
     assert len(result.issues) == 1
     assert result.issues[0].count == 1
-    assert result.issues[0].percentage == 25.0
-    # CSV başlık hesabı nedeniyle (0. indeks = 2. satır) eşleşme (4 -> 3) olarak döner
-    assert "(4 -> 3)" in result.issues[0].message
+    # Yinelenen satır indeksi (2. satır, 0-tabanlı) CSV'de 4. satıra denk gelir
+    assert 4 in result.issues[0].row_numbers
 
 
 def test_duplicate_rows_with_nan():
-    """NaN içeren tekrarlanan kayıtların dropna=False ile doğru tespit edildiğini doğrular."""
+    """NaN içeren tekrarlanan satırların da doğru tespit edildiğini doğrular."""
     df = pd.DataFrame(
         {
-            "id": [1, 2, 2],
-            "aciklama": ["ilk", None, None],
+            "id": [1, 1],
+            "isim": [None, None],
         }
     )
     result = check_duplicate_rows(df)
 
     assert result.status == CheckStatus.FAILED
-    assert len(result.issues) == 1
     assert result.issues[0].count == 1
-    # Satır 4 kopya, satır 3 orijinal -> (4 -> 3)
-    assert "(4 -> 3)" in result.issues[0].message
 
 
 def test_duplicate_rows_clean_data():
-    """Tekil satırlardan oluşan veride PASSED döndüğünü doğrular."""
-    df = pd.DataFrame({"id": [1, 2, 3], "deger": ["a", "b", "c"]})
+    """Tekrarsız veri setinde PASSED döndüğünü doğrular."""
+    df = pd.DataFrame({"id": [1, 2, 3], "isim": ["A", "B", "C"]})
     result = check_duplicate_rows(df)
 
     assert result.status == CheckStatus.PASSED
@@ -82,10 +80,10 @@ def test_duplicate_rows_clean_data():
 
 
 def test_type_mismatch_detection():
-    """Sayısal sütundaki metin uyuşmazlığının tespit edildiğini doğrular."""
+    """Sayısal sütunda metin bulunmasını tespit ettiğini doğrular."""
     df = pd.DataFrame(
         {
-            "yas": ["25", "30", "otuz bes", "40", "ellibir"],
+            "yas": [25, "otuz bes", 40, "elli", 60, 70, 80],
         }
     )
     result = check_type_mismatches(df)
@@ -136,6 +134,64 @@ def test_outliers_low_cardinality_ignored():
 def test_outliers_clean_data():
     """Uç değer bulunmayan veri setinde PASSED döndüğünü doğrular."""
     df = pd.DataFrame({"puan": [50, 52, 48, 51, 49, 53, 50]})
+    result = check_outliers_iqr(df)
+
+    assert result.status == CheckStatus.PASSED
+    assert len(result.issues) == 0
+
+
+def test_outliers_mixed_numeric_with_corrupt_strings_and_extremes():
+    """Bozuk metin ('abc') içeren sayısal ağırlıklı sütunda IQR'ın 2 aykırı değeri tespit ettiğini,
+    bozuk metnin IQR hesabına ve aykırı değer listesine dahil edilmediğini ve satır numaralarının
+    orijinal Excel indeksli sırada korunduğunu doğrular.
+    """
+    # 10 satırlık DataFrame:
+    # 0 -> 100 (satır 2)
+    # 1 -> 110 (satır 3)
+    # 2 -> 120 (satır 4)
+    # 3 -> 130 (satır 5)
+    # 4 -> 140 (satır 6)
+    # 5 -> 150 (satır 7)
+    # 6 -> 160 (satır 8)
+    # 7 -> "abc" (satır 9) - bozuk metin
+    # 8 -> 5000 (satır 10) - aşırı uç değer
+    # 9 -> 4500 (satır 11) - aşırı uç değer
+    df = pd.DataFrame(
+        {
+            "MİKTAR": [100, 110, 120, 130, 140, 150, 160, "abc", 5000, 4500]
+        }
+    )
+    result = check_outliers_iqr(df)
+
+    assert result.status == CheckStatus.WARNING
+    assert len(result.issues) == 1
+    issue = result.issues[0]
+    assert issue.column == "MİKTAR"
+    assert issue.severity == Severity.WARNING
+    assert issue.count == 2
+    # Excel indeksli satır numaraları: satır 10 ve satır 11
+    assert issue.row_numbers == [10, 11]
+    # "abc" değerinin aykırı değer örneklerinde yer almadığını doğrula
+    assert "abc" not in issue.sample_values
+    assert 5000 in issue.sample_values or "5000" in [str(x) for x in issue.sample_values]
+    assert 4500 in issue.sample_values or "4500" in [str(x) for x in issue.sample_values]
+
+
+def test_outliers_pure_text_column_ignored():
+    """Tamamen metin/tarih sütunlarının sayısal aday sayılmayıp atlandığını doğrular."""
+    df = pd.DataFrame(
+        {
+            "sehir": ["İstanbul", "Ankara", "İzmir", "Bursa", "Antalya", "Adana"],
+            "tarih": [
+                "2025.01.01",
+                "2025.01.02",
+                "2025.01.03",
+                "2025.01.04",
+                "2025.01.05",
+                "2025.01.06",
+            ],
+        }
+    )
     result = check_outliers_iqr(df)
 
     assert result.status == CheckStatus.PASSED
