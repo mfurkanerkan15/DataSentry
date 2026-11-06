@@ -436,7 +436,7 @@ def test_json_reporter_render_and_write(dummy_report, tmp_path):
     rendered = reporter.render(dummy_report)
 
     data = json.loads(rendered)
-    assert data["datasentry_version"] == "0.3.0"
+    assert data["datasentry_version"] == "0.4.0"
     assert "timestamp" in data
     assert data["execution_time_ms"] == 12.5
     assert data["quality_score"] == 94.5
@@ -562,7 +562,7 @@ def test_cli_output_auto_detect_json(tmp_path, runner):
     assert out_file.exists()
     data = json.loads(out_file.read_text(encoding="utf-8"))
     assert data["is_valid"] is True
-    assert data["datasentry_version"] == "0.3.0"
+    assert data["datasentry_version"] == "0.4.0"
 
 
 def test_cli_output_unknown_extension(tmp_path, runner):
@@ -597,7 +597,7 @@ def test_cli_json_stdout_pure(runner):
     assert result.exit_code == 0
     # stdout doğrudan parse edilebilmeli, hiçbir Rich tablosu karışmamalı
     data = json.loads(result.stdout)
-    assert data["datasentry_version"] == "0.3.0"
+    assert data["datasentry_version"] == "0.4.0"
     assert data["is_valid"] is True
     assert data["quality_score"] == 98.5
 

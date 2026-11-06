@@ -4,11 +4,11 @@
 
 Python tabanlı, yerel çalışan ve modüler bir veri kalite doğrulama aracı.
 
-> **Durum:** `v0.3.0`. Çekirdek kalite kontrolleri, YAML tabanlı dinamik yapılandırma motoru, şema doğrulama, standart çıkış kodları, modüler JSON dışa aktarma ve Jinja2 tabanlı modern çevrimdışı HTML dashboard hazır.
+> **Durum:** `v0.4.0`. Çekirdek kalite kontrolleri, YAML tabanlı dinamik yapılandırma motoru, şema doğrulama, standart çıkış kodları, modüler JSON dışa aktarma ve Jinja2 tabanlı modern çevrimdışı HTML dashboard hazır. GitHub Actions CI pipeline (Python 3.11 & 3.12 matrix) ve pre-commit hook'ları (Ruff lint + format) eklenmiştir.
 
 ---
 
-## Özellikler (v0.3.0)
+## Özellikler (v0.4.0)
 
 | Özellik | Açıklama |
 |---|---|
@@ -25,6 +25,8 @@ Python tabanlı, yerel çalışan ve modüler bir veri kalite doğrulama aracı.
 | **Yol gizliliği** | Raporlarda varsayılan olarak yalnızca dosya adı gösterilir; tam yol için `--show-path` bayrağı mevcuttur |
 | **Kalite Skoru (%)** | Ağırlıklı ihlal oranına dayalı %0.00 - %100.00 arası genel veri kalite puanı |
 | **Standart çıkış kodları** | CI/CD süreçleri için `0` (Başarılı), `1` (Kalite Hatası), `2` (Girdi/Dosya Hatası) ayrımı |
+| **GitHub Actions CI** | Push ve PR'larda Python 3.11 & 3.12 matrixi üzerinde otomatik lint + test |
+| **Pre-commit hook'ları** | Commit öncesi otomatik Ruff lint ve format kontrolü |
 
 > **Not:** Aykırı değer, otomatik olarak hatalı veri demek değildir. Bu kontrol şüpheli değerleri işaretler; nihai karar kullanıcıya aittir.
 
@@ -85,7 +87,7 @@ datasentry check dosya.csv --max-samples 50
 datasentry --version
 ```
 
-### Raporlama ve Dışa Aktarma (v0.3.0)
+### Raporlama ve Dışa Aktarma (v0.3.0 — v0.4.0)
 
 ```bash
 # HTML dashboard raporu üret (Uzantıdan otomatik tespit)
@@ -133,7 +135,7 @@ Skor kartı renklendirmesinde kritik hata varlığı (`is_valid == False`) dikka
 ### 2. JSON Çıktısı Örneği
 ```json
 {
-  "datasentry_version": "0.3.0",
+  "datasentry_version": "0.4.0",
   "timestamp": "2026-11-02T13:00:00+00:00",
   "execution_time_ms": 14.8,
   "quality_score": 96.0,
@@ -200,6 +202,10 @@ checks:
 
 ```
 DataSentry/
+├── .github/
+│   └── workflows/
+│       └── ci.yml              # GitHub Actions CI pipeline (Python 3.11 & 3.12 matrix)
+├── .pre-commit-config.yaml     # Pre-commit hook'ları (Ruff lint + format)
 ├── .gitignore
 ├── pyproject.toml              # Paketleme, bağımlılıklar ve araç yapılandırmaları
 ├── README.md
@@ -214,7 +220,7 @@ DataSentry/
 │   ├── test_schema.py          # Şema doğrulama testleri
 │   └── test_validators.py      # Kalite kontrol birim testleri
 └── datasentry/
-    ├── __init__.py             # Paket tanımı ve sürüm bilgisi (v0.3.0)
+    ├── __init__.py             # Paket tanımı ve sürüm bilgisi (v0.4.0)
     ├── __main__.py             # Modül giriş noktası
     ├── cli.py                  # CLI komutları ve terminal arayüzü (Typer + Rich)
     ├── config.py               # Pydantic v2 YAML kural ve doğrulama motoru
@@ -249,7 +255,7 @@ Tasarım ilkesi: CLI yalnızca giriş ve sunum katmanıdır. Raporlayıcılar ve
 | **v0.1.0** | Temel altyapı ve kontrol motoru | CLI, CSV yükleme, eksik değer, tekrar, tip ve aykırı değer kontrolleri, birim testler | ✅ Tamamlandı |
 | **v0.2.0** | Dinamik kurallar ve şema | `--config kurallar.yaml` desteği, Pydantic ile kural doğrulama, zorunlu sütun, tip ve nullable şema doğrulaması, standart exit kodları (`0`, `1`, `2`) | ✅ Tamamlandı |
 | **v0.3.0** | Raporlama ve dışa aktarma | `--output` ve `--format` ile JSON çıktısı ve Jinja2 şablonları ile modern HTML dashboard desteği | ✅ Tamamlandı |
-| **v0.4.0** | Otomasyon ve CI/CD | GitHub Actions ile otomatik test (push/PR) ve pre-commit hook'ları (Ruff) | 🔜 Planlandı |
+| **v0.4.0** | Otomasyon ve CI/CD | GitHub Actions ile otomatik test (push/PR) ve pre-commit hook'ları (Ruff) | ✅ Tamamlandı |
 
 ---
 
@@ -269,6 +275,37 @@ pytest -v
 # Linter kontrolü
 ruff check .
 ```
+
+---
+
+## CI/CD ve Geliştirici Araçları (v0.4.0)
+
+### GitHub Actions CI
+
+Her `push` ve `main`'e açılan `pull_request`'te otomatik olarak çalışır:
+
+- Python **3.11** ve **3.12** matrixi üzerinde paralel test
+- `ruff check .` → lint
+- `pytest -v --tb=short` → birim ve entegrasyon testleri
+
+Workflow dosyası: `.github/workflows/ci.yml`
+
+### Pre-commit Hook'ları
+
+Commit öncesi otomatik Ruff lint ve format kontrolü. İlk kurulum:
+
+```bash
+# pre-commit kur (dev bağımlılığı olarak zaten pyproject.toml'da)
+pip install -e ".[dev]"
+
+# Hook'ları aktif et (repo başına bir kez çalıştırılır)
+pre-commit install
+
+# Tüm dosyalarda manuel olarak çalıştır
+pre-commit run --all-files
+```
+
+Yapılandırma dosyası: `.pre-commit-config.yaml`
 
 ---
 

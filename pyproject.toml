@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "datasentry"
-version = "0.3.0"
+version = "0.4.0"
 description = "CSV Data Quality & Validation CLI"
 readme = "README.md"
 license = { text = "MIT" }
@@ -35,6 +35,7 @@ dependencies = [
 dev = [
     "pytest>=7.0",
     "ruff>=0.1",
+    "pre-commit>=3.0",
 ]
 
 [project.scripts]
